@@ -356,7 +356,7 @@ with tab_tutors:
         best_display["avg_months_per_student"] = best_display["avg_months_per_student"].apply(lambda x: f"{x:.2f}")
         best_display["avg_lessons_per_student"] = best_display["avg_lessons_per_student"].apply(lambda x: f"{x:.2f}")
         best_display["total_revenue"] = best_display["total_revenue"].apply(lambda x: f"S${x:,.0f}")
-        st.table(best_display)
+        st.markdown(best_display.to_html(index=False, escape=False), unsafe_allow_html=True)
 
     with c2:
         st.markdown("#### 🔴 Red-Flag Tutors (High Drop Rate)")
@@ -376,8 +376,106 @@ with tab_tutors:
         worst_display["avg_months_per_student"] = worst_display["avg_months_per_student"].apply(lambda x: f"{x:.2f}")
         worst_display["avg_lessons_per_student"] = worst_display["avg_lessons_per_student"].apply(lambda x: f"{x:.2f}")
         worst_display["total_revenue"] = worst_display["total_revenue"].apply(lambda x: f"S${x:,.0f}")
-        st.table(worst_display)
+        st.markdown(worst_display.to_html(index=False, escape=False), unsafe_allow_html=True)
 
+    st.markdown("---")
+    
+    # Detailed dropout analysis
+    st.markdown("### 📋 Detailed Student Dropout Analysis")
+    st.markdown("See which students 'dropped' (had only 1 lesson) with each tutor")
+    
+    # Create dropout details
+    dropout_details = pair_stats[pair_stats['n_lessons'] == 1].copy()
+    dropout_details = dropout_details.sort_values('tutor')
+    
+    # Let user select a tutor to see details
+    tutor_list = sorted(tutor_stats['tutor'].unique())
+    selected_tutor = st.selectbox("Select a tutor to see dropout details:", tutor_list)
+    
+    if selected_tutor:
+        tutor_dropouts = dropout_details[dropout_details['tutor'] == selected_tutor]
+        tutor_all_students = pair_stats[pair_stats['tutor'] == selected_tutor]
+        
+        # Get tutor stats
+        tutor_info = tutor_stats[tutor_stats['tutor'] == selected_tutor].iloc[0]
+        
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Students", int(tutor_info['n_students']))
+        col2.metric("Dropped Students", len(tutor_dropouts))
+        col3.metric("Drop Rate", f"{tutor_info['share_quick_drop']:.1%}")
+        col4.metric("Retention Score", f"{tutor_info['retention_score']:.2f}")
+        
+        # Show dropped students
+        if len(tutor_dropouts) > 0:
+            st.markdown(f"#### 🚨 Students who dropped after 1 lesson ({len(tutor_dropouts)} students)")
+            
+            dropout_display = tutor_dropouts[['student', 'first_date', 'total_revenue']].copy()
+            dropout_display.columns = ['Student', 'Lesson Date', 'Revenue']
+            dropout_display['Lesson Date'] = dropout_display['Lesson Date'].dt.strftime('%Y-%m-%d')
+            dropout_display['Revenue'] = dropout_display['Revenue'].apply(lambda x: f"S${x:,.0f}")
+            dropout_display = dropout_display.reset_index(drop=True)
+            
+            st.markdown(dropout_display.to_html(index=False, escape=False), unsafe_allow_html=True)
+        else:
+            st.success("✅ No students dropped after just 1 lesson!")
+        
+        # Show retained students (2+ lessons)
+        retained_students = tutor_all_students[tutor_all_students['n_lessons'] >= 2]
+        if len(retained_students) > 0:
+            st.markdown(f"#### ✅ Students with 2+ lessons ({len(retained_students)} students)")
+            
+            retained_display = retained_students[['student', 'n_lessons', 'n_months', 'total_revenue', 'last_date']].copy()
+            retained_display.columns = ['Student', 'Lessons', 'Months Active', 'Total Revenue', 'Last Lesson']
+            retained_display = retained_display.sort_values('Lessons', ascending=False)
+            retained_display['Total Revenue'] = retained_display['Total Revenue'].apply(lambda x: f"S${x:,.0f}")
+            retained_display['Last Lesson'] = retained_display['Last Lesson'].dt.strftime('%Y-%m-%d')
+            retained_display = retained_display.reset_index(drop=True)
+            
+            st.markdown(retained_display.to_html(index=False, escape=False), unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Summary table: All tutors with dropout lists
+    st.markdown("### 📊 Complete Dropout Summary (All Tutors)")
+    
+    # Create summary with dropout student names
+    dropout_summary = []
+    for tutor in tutor_stats['tutor'].unique():
+        tutor_dropouts = dropout_details[dropout_details['tutor'] == tutor]
+        tutor_info = tutor_stats[tutor_stats['tutor'] == tutor].iloc[0]
+        
+        dropout_names = tutor_dropouts['student'].tolist()
+        dropout_str = ", ".join(dropout_names) if len(dropout_names) > 0 else "None"
+        
+        dropout_summary.append({
+            'Tutor': tutor,
+            'Total Students': int(tutor_info['n_students']),
+            'Dropped Count': len(tutor_dropouts),
+            'Drop Rate': f"{tutor_info['share_quick_drop']:.1%}",
+            'Retention Score': f"{tutor_info['retention_score']:.2f}",
+            'Dropped Students': dropout_str
+        })
+    
+    dropout_summary_df = pd.DataFrame(dropout_summary)
+    dropout_summary_df = dropout_summary_df.sort_values('Dropped Count', ascending=False)
+    
+    # Display with scrollable HTML table
+    st.markdown(
+        f'<div style="max-height: 400px; overflow-y: auto;">{dropout_summary_df.to_html(index=False, escape=False)}</div>',
+        unsafe_allow_html=True
+    )
+    
+    # Download button for the summary
+    csv = dropout_summary_df.to_csv(index=False)
+    st.download_button(
+        label="📥 Download Dropout Summary as CSV",
+        data=csv,
+        file_name="tutor_dropout_summary.csv",
+        mime="text/csv"
+    )
+    
+    st.markdown("---")
+    
     st.markdown("### Tutor Retention Scatter (quality vs volume)")
     fig = px.scatter(
         filtered_tutors,
@@ -426,7 +524,7 @@ with tab_students:
     sr_display["retained_from_prev"] = sr_display["retained_from_prev"].apply(lambda x: f"{x:,.0f}" if pd.notna(x) else "")
     sr_display["retention_rate"] = sr_display["retention_rate"].apply(lambda x: f"{x:.1%}" if pd.notna(x) else "")
     sr_display["churn_rate"] = sr_display["churn_rate"].apply(lambda x: f"{x:.1%}" if pd.notna(x) else "")
-    st.table(sr_display)
+    st.markdown(sr_display.to_html(index=False, escape=False), unsafe_allow_html=True)
 
 # ----- MoM Churn (Tutors & Students) -----
 with tab_churn:
@@ -462,7 +560,7 @@ with tab_churn:
         sr_display2["retention_rate"] = sr_display2["retention_rate"].apply(lambda x: f"{x:.1%}" if pd.notna(x) else "")
         sr_display2["churn_rate"] = sr_display2["churn_rate"].apply(lambda x: f"{x:.1%}" if pd.notna(x) else "")
         sr_display2 = sr_display2.drop(columns=["type"])
-        st.table(sr_display2)
+        st.markdown(sr_display2.to_html(index=False, escape=False), unsafe_allow_html=True)
     with c2:
         st.markdown("#### Tutors")
         tr_display = tr.copy()
@@ -472,4 +570,4 @@ with tab_churn:
         tr_display["retention_rate"] = tr_display["retention_rate"].apply(lambda x: f"{x:.1%}" if pd.notna(x) else "")
         tr_display["churn_rate"] = tr_display["churn_rate"].apply(lambda x: f"{x:.1%}" if pd.notna(x) else "")
         tr_display = tr_display.drop(columns=["type"])
-        st.table(tr_display)
+        st.markdown(tr_display.to_html(index=False, escape=False), unsafe_allow_html=True)
