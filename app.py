@@ -9,6 +9,46 @@ import plotly.graph_objects as go
 import os
 os.environ["STREAMLIT_SERVER_ENABLE_ARROW_TABLES"] = "false"
 
+# Custom CSS for better table styling
+st.markdown("""
+<style>
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+    }
+    table th {
+        background-color: #262730;
+        color: white;
+        padding: 12px 8px;
+        text-align: left;
+        font-weight: 600;
+        border-bottom: 2px solid #444;
+    }
+    table td {
+        padding: 10px 8px;
+        border-bottom: 1px solid #333;
+    }
+    table tr:hover {
+        background-color: #1e1e1e;
+    }
+    .alert-red {
+        background-color: #ff4444;
+        color: white;
+        padding: 10px;
+        border-radius: 5px;
+        margin: 5px 0;
+    }
+    .alert-amber {
+        background-color: #ffaa00;
+        color: black;
+        padding: 10px;
+        border-radius: 5px;
+        margin: 5px 0;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # -----------------------------
 # Data loading & cleaning
 # -----------------------------
@@ -127,6 +167,61 @@ def tutor_student_pair_stats(df: pd.DataFrame) -> pd.DataFrame:
     pair["last_month"] = pair["last_date"].dt.to_period("M").dt.to_timestamp()
 
     return pair
+
+
+def calculate_student_alerts(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calculate student alerts:
+    - Red Alert: No lesson in past 30 days
+    - Amber Alert: Lesson frequency dropped (gap increased significantly)
+    """
+    alerts = []
+    current_date = df['Date'].max()
+    
+    for student in df['student'].unique():
+        student_df = df[df['student'] == student].sort_values('Date')
+        
+        if len(student_df) < 2:
+            continue  # Need at least 2 lessons to calculate frequency
+        
+        last_lesson = student_df['Date'].max()
+        days_since_last = (current_date - last_lesson).days
+        
+        # Red Alert: No lesson in past 30 days (but had lessons before)
+        red_alert = days_since_last > 30
+        
+        # Calculate average gap between lessons (excluding current gap)
+        dates = student_df['Date'].values
+        gaps = []
+        for i in range(len(dates) - 1):
+            gap = (pd.Timestamp(dates[i + 1]) - pd.Timestamp(dates[i])).days
+            gaps.append(gap)
+        
+        avg_gap = np.mean(gaps) if gaps else 0
+        
+        # Amber Alert: Current gap is 2x the average historical gap (and > 14 days)
+        amber_alert = False
+        if not red_alert and avg_gap > 0 and days_since_last > 14:
+            if days_since_last > (avg_gap * 2):
+                amber_alert = True
+        
+        if red_alert or amber_alert:
+            # Get student's tutor(s)
+            tutors = student_df['tutor'].unique()
+            tutor_str = ", ".join(tutors)
+            
+            alerts.append({
+                'Student': student,
+                'Tutor(s)': tutor_str,
+                'Last Lesson': last_lesson,
+                'Days Since Last': days_since_last,
+                'Avg Gap (days)': avg_gap,
+                'Total Lessons': len(student_df),
+                'Alert Type': '🔴 Red' if red_alert else '🟠 Amber',
+                'Action': 'Follow up immediately' if red_alert else 'Check on engagement'
+            })
+    
+    return pd.DataFrame(alerts)
 
 
 def tutor_retention_metrics(pair: pd.DataFrame) -> pd.DataFrame:
@@ -503,6 +598,66 @@ with tab_tutors:
 
 # ----- Student Retention -----
 with tab_students:
+    st.markdown("### 🚨 Student Engagement Alerts")
+    
+    # Calculate alerts
+    student_alerts = calculate_student_alerts(df)
+    
+    if len(student_alerts) > 0:
+        # Split into red and amber alerts
+        red_alerts = student_alerts[student_alerts['Alert Type'] == '🔴 Red']
+        amber_alerts = student_alerts[student_alerts['Alert Type'] == '🟠 Amber']
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("🔴 Red Alerts", len(red_alerts), help="Students with no lesson in 30+ days")
+        with col2:
+            st.metric("🟠 Amber Alerts", len(amber_alerts), help="Students with decreased lesson frequency")
+        
+        # Red Alerts
+        if len(red_alerts) > 0:
+            st.markdown("#### 🔴 Red Alerts - Follow Up Immediately")
+            st.markdown("*Students who haven't had a lesson in the past 30 days*")
+            
+            red_display = red_alerts.copy()
+            red_display['Last Lesson'] = red_display['Last Lesson'].dt.strftime('%Y-%m-%d')
+            red_display['Avg Gap (days)'] = red_display['Avg Gap (days)'].apply(lambda x: f"{x:.0f}")
+            red_display = red_display.sort_values('Days Since Last', ascending=False)
+            
+            st.markdown(
+                f'<div class="alert-red">{red_display.to_html(index=False, escape=False)}</div>',
+                unsafe_allow_html=True
+            )
+        
+        # Amber Alerts
+        if len(amber_alerts) > 0:
+            st.markdown("#### 🟠 Amber Alerts - Check on Engagement")
+            st.markdown("*Students whose lesson frequency has significantly decreased*")
+            
+            amber_display = amber_alerts.copy()
+            amber_display['Last Lesson'] = amber_display['Last Lesson'].dt.strftime('%Y-%m-%d')
+            amber_display['Avg Gap (days)'] = amber_display['Avg Gap (days)'].apply(lambda x: f"{x:.0f}")
+            amber_display = amber_display.sort_values('Days Since Last', ascending=False)
+            
+            st.markdown(
+                f'<div class="alert-amber">{amber_display.to_html(index=False, escape=False)}</div>',
+                unsafe_allow_html=True
+            )
+        
+        # Download alerts
+        alerts_csv = student_alerts.copy()
+        alerts_csv['Last Lesson'] = alerts_csv['Last Lesson'].dt.strftime('%Y-%m-%d')
+        st.download_button(
+            label="📥 Download Student Alerts as CSV",
+            data=alerts_csv.to_csv(index=False),
+            file_name="student_alerts.csv",
+            mime="text/csv"
+        )
+    else:
+        st.success("✅ No student alerts! All students are actively engaged.")
+    
+    st.markdown("---")
+    
     st.markdown("### Student Retention Over Time")
 
     sr_clean = student_retention.dropna(subset=["retention_rate"])
