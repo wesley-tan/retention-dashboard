@@ -432,46 +432,47 @@ with tab_tutors:
         .reset_index(drop=True)
     )
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("#### 🟢 Best Tutors (High Retention)")
-        best_display = best[
-            [
-                "tutor",
-                "retention_score",
-                "n_students",
-                "share_quick_drop",
-                "avg_months_per_student",
-                "avg_lessons_per_student",
-                "total_revenue",
-            ]
-        ].copy()
-        best_display["retention_score"] = best_display["retention_score"].apply(lambda x: f"{x:.2f}")
-        best_display["share_quick_drop"] = best_display["share_quick_drop"].apply(lambda x: f"{x:.1%}")
-        best_display["avg_months_per_student"] = best_display["avg_months_per_student"].apply(lambda x: f"{x:.2f}")
-        best_display["avg_lessons_per_student"] = best_display["avg_lessons_per_student"].apply(lambda x: f"{x:.2f}")
-        best_display["total_revenue"] = best_display["total_revenue"].apply(lambda x: f"S${x:,.0f}")
-        st.markdown(best_display.to_html(index=False, escape=False), unsafe_allow_html=True)
-
-    with c2:
-        st.markdown("#### 🔴 Red-Flag Tutors (High Drop Rate)")
-        worst_display = worst[
-            [
-                "tutor",
-                "retention_score",
-                "n_students",
-                "share_quick_drop",
-                "avg_months_per_student",
-                "avg_lessons_per_student",
-                "total_revenue",
-            ]
-        ].copy()
-        worst_display["retention_score"] = worst_display["retention_score"].apply(lambda x: f"{x:.2f}")
-        worst_display["share_quick_drop"] = worst_display["share_quick_drop"].apply(lambda x: f"{x:.1%}")
-        worst_display["avg_months_per_student"] = worst_display["avg_months_per_student"].apply(lambda x: f"{x:.2f}")
-        worst_display["avg_lessons_per_student"] = worst_display["avg_lessons_per_student"].apply(lambda x: f"{x:.2f}")
-        worst_display["total_revenue"] = worst_display["total_revenue"].apply(lambda x: f"S${x:,.0f}")
-        st.markdown(worst_display.to_html(index=False, escape=False), unsafe_allow_html=True)
+    # Best tutors table
+    st.markdown("#### 🟢 Best Tutors (High Retention)")
+    best_display = best[
+        [
+            "tutor",
+            "retention_score",
+            "n_students",
+            "share_quick_drop",
+            "avg_months_per_student",
+            "avg_lessons_per_student",
+            "total_revenue",
+        ]
+    ].copy()
+    best_display["retention_score"] = best_display["retention_score"].apply(lambda x: f"{x:.2f}")
+    best_display["share_quick_drop"] = best_display["share_quick_drop"].apply(lambda x: f"{x:.1%}")
+    best_display["avg_months_per_student"] = best_display["avg_months_per_student"].apply(lambda x: f"{x:.2f}")
+    best_display["avg_lessons_per_student"] = best_display["avg_lessons_per_student"].apply(lambda x: f"{x:.2f}")
+    best_display["total_revenue"] = best_display["total_revenue"].apply(lambda x: f"S${x:,.0f}")
+    st.markdown(best_display.to_html(index=False, escape=False), unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Worst tutors table
+    st.markdown("#### 🔴 Red-Flag Tutors (High Drop Rate)")
+    worst_display = worst[
+        [
+            "tutor",
+            "retention_score",
+            "n_students",
+            "share_quick_drop",
+            "avg_months_per_student",
+            "avg_lessons_per_student",
+            "total_revenue",
+        ]
+    ].copy()
+    worst_display["retention_score"] = worst_display["retention_score"].apply(lambda x: f"{x:.2f}")
+    worst_display["share_quick_drop"] = worst_display["share_quick_drop"].apply(lambda x: f"{x:.1%}")
+    worst_display["avg_months_per_student"] = worst_display["avg_months_per_student"].apply(lambda x: f"{x:.2f}")
+    worst_display["avg_lessons_per_student"] = worst_display["avg_lessons_per_student"].apply(lambda x: f"{x:.2f}")
+    worst_display["total_revenue"] = worst_display["total_revenue"].apply(lambda x: f"S${x:,.0f}")
+    st.markdown(worst_display.to_html(index=False, escape=False), unsafe_allow_html=True)
 
     st.markdown("---")
     
