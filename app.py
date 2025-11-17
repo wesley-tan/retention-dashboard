@@ -9,6 +9,13 @@ import plotly.graph_objects as go
 import os
 os.environ["STREAMLIT_SERVER_ENABLE_ARROW_TABLES"] = "false"
 
+# MUST BE FIRST STREAMLIT COMMAND
+st.set_page_config(
+    page_title="Tutor Retention Dashboard",
+    page_icon="📊",
+    layout="wide",
+)
+
 # Custom CSS for better table styling
 st.markdown("""
 <style>
@@ -268,12 +275,6 @@ def tutor_retention_metrics(pair: pd.DataFrame) -> pd.DataFrame:
 # -----------------------------
 # Streamlit UI
 # -----------------------------
-st.set_page_config(
-    page_title="Tutor Retention Dashboard",
-    page_icon="📊",
-    layout="wide",
-)
-
 st.title("📊 Tutor & Student Retention Dashboard")
 
 uploaded = st.file_uploader("Upload your lesson CSV", type=["csv"])
